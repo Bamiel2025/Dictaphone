@@ -161,16 +161,21 @@ function App() {
     formData.append('audio', audioFile);
 
     try {
-      const response = await fetch('/upload', {
+      console.log('Sending request to /upload...');
+      const response = await fetch('/api/upload', {
         method: 'POST',
         body: formData,
       });
 
+      console.log('Response status:', response.status);
       const data = await response.json();
-      
+      console.log('Response data:', data);
+
       if (response.ok) {
-        setTranscription(data.transcription);
-        setSummary(data.summary);
+        setTranscription(data.transcription || 'Transcription completed but no text returned');
+        setSummary(data.summary || 'Summary completed but no text returned');
+        console.log('Transcription set:', data.transcription);
+        console.log('Summary set:', data.summary);
       } else {
         setError(data.error || 'Upload failed');
       }
@@ -197,7 +202,7 @@ function App() {
     setError('');
 
     try {
-      const response = await fetch('/ask', {
+      const response = await fetch('/api/ask', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -267,14 +272,14 @@ function App() {
           </section>
         )}
 
-        {transcription && (
+        {(transcription || summary) && (
           <section className="results-section">
             <h2>Transcription Result</h2>
             <div className="transcription">
               <h3>Transcribed Text</h3>
-              <textarea 
-                value={transcription} 
-                readOnly 
+              <textarea
+                value={transcription || 'No transcription available'}
+                readOnly
                 placeholder="Transcribed text will appear here..."
               />
             </div>
