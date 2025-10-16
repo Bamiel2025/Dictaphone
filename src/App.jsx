@@ -1,6 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './App.css';
 
+// Web Speech API variables
+let recognition = null;
+
 // Fonction pour exporter en texte simple
 const exportAsText = (transcription, summary) => {
   const content = `TRANSCRIPTION AUDIO\n\n${transcription}\n\nRÉSUMÉ\n\n${summary || 'Aucun résumé disponible'}`;
@@ -15,10 +18,26 @@ const exportAsText = (transcription, summary) => {
   URL.revokeObjectURL(url);
 };
 
+// Initialize Web Speech API
+const initSpeechRecognition = () => {
+  if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    recognition = new SpeechRecognition();
+
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'fr-FR'; // French language
+
+    return true;
+  }
+  return false;
+};
+
 // Remove socket.io connection for Vercel deployment
 
 function App() {
   const [isRecording, setIsRecording] = useState(false);
+  const [isListening, setIsListening] = useState(false);
   const [audioFile, setAudioFile] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [transcription, setTranscription] = useState('');
@@ -26,7 +45,8 @@ function App() {
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
   const [error, setError] = useState('');
-  
+  const [speechSupported, setSpeechSupported] = useState(false);
+
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
 
@@ -117,9 +137,18 @@ function App() {
     }
   };
 
-  // Check microphone permissions on component mount
+  // Initialize speech recognition and check permissions on component mount
   useEffect(() => {
-    const checkMicrophonePermission = async () => {
+    const initializeApp = async () => {
+      // Check if Web Speech API is supported
+      const speechSupported = initSpeechRecognition();
+      setSpeechSupported(speechSupported);
+
+      if (!speechSupported) {
+        setError('Web Speech API not supported in this browser. Please use Chrome, Edge, or Safari.');
+      }
+
+      // Check microphone permissions
       try {
         if (navigator.permissions) {
           const permission = await navigator.permissions.query({ name: 'microphone' });
@@ -132,8 +161,86 @@ function App() {
       }
     };
 
-    checkMicrophonePermission();
+    initializeApp();
   }, []);
+
+  // Start speech recognition
+  const startSpeechRecognition = () => {
+    if (!recognition) {
+      setError('Speech recognition not available');
+      return;
+    }
+
+    setIsListening(true);
+    setError('');
+    setTranscription('');
+    setSummary('');
+
+    recognition.onstart = () => {
+      console.log('Speech recognition started');
+    };
+
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      console.log('Speech recognized:', transcript);
+      setTranscription(transcript);
+      setIsListening(false);
+
+      // Automatically generate summary after transcription
+      generateSummary(transcript);
+    };
+
+    recognition.onerror = (event) => {
+      console.error('Speech recognition error:', event.error);
+      setError(`Speech recognition error: ${event.error}`);
+      setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      console.log('Speech recognition ended');
+      setIsListening(false);
+    };
+
+    try {
+      recognition.start();
+    } catch (err) {
+      console.error('Error starting speech recognition:', err);
+      setError('Failed to start speech recognition');
+      setIsListening(false);
+    }
+  };
+
+  // Stop speech recognition
+  const stopSpeechRecognition = () => {
+    if (recognition && isListening) {
+      recognition.stop();
+      setIsListening(false);
+    }
+  };
+
+  // Generate summary using Gemini API
+  const generateSummary = async (text) => {
+    if (!text) return;
+
+    try {
+      const response = await fetch('/api/summarize', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text }),
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        setSummary(data.summary);
+      } else {
+        console.error('Summary generation failed:', data.error);
+      }
+    } catch (err) {
+      console.error('Summary generation error:', err);
+    }
+  };
 
   // Toggle recording
   const toggleRecording = () => {
@@ -141,6 +248,15 @@ function App() {
       stopRecording();
     } else {
       startRecording();
+    }
+  };
+
+  // Toggle speech recognition
+  const toggleSpeechRecognition = () => {
+    if (isListening) {
+      stopSpeechRecognition();
+    } else {
+      startSpeechRecognition();
     }
   };
 
@@ -242,27 +358,43 @@ function App() {
         )}
 
         <section className="upload-section">
-          <h2>Upload or Record Audio</h2>
+          <h2>Upload Audio or Use Voice Recognition</h2>
           <div className="upload-controls">
-            <input 
-              type="file" 
-              accept="audio/*" 
+            <input
+              type="file"
+              accept="audio/*"
               onChange={handleFileChange}
               capture="microphone"
             />
-            <button 
+            <button
               onClick={toggleRecording}
               className={isRecording ? 'recording' : ''}
             >
               {isRecording ? 'Stop Recording' : 'Record Audio'}
             </button>
-            <button 
+            <button
               onClick={uploadAudio}
               disabled={isProcessing || (!audioFile && !isRecording)}
             >
               {isProcessing ? 'Processing...' : 'Upload Audio'}
             </button>
           </div>
+
+          {speechSupported && (
+            <div className="speech-controls">
+              <h3>Reconnaissance Vocale (Gratuit)</h3>
+              <button
+                onClick={toggleSpeechRecognition}
+                className={isListening ? 'listening' : 'speech'}
+                disabled={isProcessing}
+              >
+                {isListening ? '🎤 Écoute en cours...' : '🎙️ Démarrer la Reconnaissance Vocale'}
+              </button>
+              <p className="speech-info">
+                Cliquez pour parler directement - la transcription se fait dans votre navigateur (gratuit, aucune clé API nécessaire)
+              </p>
+            </div>
+          )}
         </section>
 
         {isProcessing && (
