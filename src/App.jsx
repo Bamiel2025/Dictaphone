@@ -1,7 +1,4 @@
 import React, { useState, useRef, useEffect } from 'react';
-import io from 'socket.io-client';
-import { jsPDF } from 'jspdf';
-import JSZip from 'jszip';
 import './App.css';
 
 // Fonction pour exporter en texte simple
@@ -18,73 +15,7 @@ const exportAsText = (transcription, summary) => {
   URL.revokeObjectURL(url);
 };
 
-// Fonction pour exporter en format LibreOffice (ODT simple)
-const exportAsODT = (transcription, summary) => {
-  const odtContent = `<?xml version="1.0" encoding="UTF-8"?>
-<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
-  xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"
-  xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0">
-  <office:body>
-    <office:text>
-      <text:h text:outline-level="1">Transcription Audio</text:h>
-      <text:p>${transcription.replace(/\n/g, '</text:p><text:p>')}</text:p>
-      <text:h text:outline-level="1">Résumé</text:h>
-      <text:p>${summary || 'Aucun résumé disponible'}</text:p>
-    </office:text>
-  </office:body>
-</office:document-content>`;
-
-  const zip = new JSZip();
-  zip.file('content.xml', odtContent);
-  zip.file('mimetype', 'application/vnd.oasis.opendocument.text');
-  zip.file('META-INF/manifest.xml', `<?xml version="1.0" encoding="UTF-8"?>
-<manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0">
-  <manifest:file-entry manifest:full-path="/" manifest:media-type="application/vnd.oasis.opendocument.text"/>
-  <manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/>
-</manifest:manifest>`);
-
-  zip.generateAsync({ type: 'blob' }).then(blob => {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'transcription.odt';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  });
-};
-
-// Fonction pour exporter en PDF
-const exportAsPDF = (transcription, summary) => {
-  if (typeof window !== 'undefined' && window.jspdf) {
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-
-    doc.setFontSize(20);
-    doc.text('Transcription Audio', 20, 30);
-
-    doc.setFontSize(12);
-    const transcriptionLines = doc.splitTextToSize(transcription, 170);
-    doc.text(transcriptionLines, 20, 50);
-
-    if (summary) {
-      doc.setFontSize(16);
-      doc.text('Résumé', 20, 80 + transcriptionLines.length * 5);
-
-      doc.setFontSize(12);
-      const summaryLines = doc.splitTextToSize(summary, 170);
-      doc.text(summaryLines, 20, 95 + transcriptionLines.length * 5);
-    }
-
-    doc.save('transcription.pdf');
-  } else {
-    alert('La bibliothèque PDF n\'est pas disponible. Veuillez utiliser l\'export TXT ou ODT.');
-  }
-};
-
-// Connect to socket.io server
-const socket = io();
+// Remove socket.io connection for Vercel deployment
 
 function App() {
   const [isRecording, setIsRecording] = useState(false);
@@ -266,39 +197,31 @@ function App() {
     setError('');
 
     try {
-      socket.emit('askQuestion', {
-        question: question,
-        context: transcription
+      const response = await fetch('/ask', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          question: question,
+          context: transcription
+        }),
       });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setAnswer(data.answer);
+      } else {
+        setError(data.error || 'Failed to get answer');
+      }
     } catch (err) {
       console.error('Question error:', err);
       setError('Failed to ask question. Please try again.');
     }
   };
 
-  // Handle socket events
-  useEffect(() => {
-    socket.on('audioProcessed', (data) => {
-      setTranscription(data.transcription);
-      setSummary(data.summary);
-      setIsProcessing(false);
-    });
-
-    socket.on('questionAnswered', (data) => {
-      setAnswer(data.answer);
-    });
-
-    socket.on('questionError', (data) => {
-      setError(data.error);
-    });
-
-    // Cleanup
-    return () => {
-      socket.off('audioProcessed');
-      socket.off('questionAnswered');
-      socket.off('questionError');
-    };
-  }, []);
+  // Remove socket event handlers for Vercel deployment
 
   return (
     <div className="app">
@@ -388,12 +311,6 @@ function App() {
               <div className="export-buttons">
                 <button onClick={() => exportAsText(transcription, summary)}>
                   Export as TXT
-                </button>
-                <button onClick={() => exportAsODT(transcription, summary)}>
-                  Export as ODT (LibreOffice)
-                </button>
-                <button onClick={() => exportAsPDF(transcription, summary)}>
-                  Export as PDF
                 </button>
               </div>
             </div>
