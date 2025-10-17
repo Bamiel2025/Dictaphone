@@ -1,6 +1,5 @@
 {
-  "framework": null,
-  "buildCommand": "cd /vercel/path0 && npm install && ./node_modules/.bin/vite build",
+  "framework": "vite",
   "outputDirectory": "dist",
   "installCommand": "npm install"
 }
