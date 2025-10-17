@@ -1,5 +1,8 @@
-// Mock AI service for demonstration purposes
-// In a real implementation, this would connect to AI APIs like OpenAI GPT
+
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+
+// Initialize the Google Generative AI with the API key from environment variables
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 class AIService {
   /**
@@ -8,24 +11,21 @@ class AIService {
    * @returns {Promise<string>} - Generated summary
    */
   static async summarize(text) {
-    // In a real implementation, we would:
-    // 1. Send the text to an AI service (like OpenAI GPT)
-    // 2. Return the generated summary
-    
-    // For demo purposes, we'll return a mock summary
-    console.log('Generating summary...');
-    
-    // Simulate processing time
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    return `This is a simulated AI-generated summary of your text. 
-Key points identified:
-1. The content discusses audio transcription technology
-2. Implementation involves speech recognition systems
-3. Applications include note-taking and content analysis
-4. Integration with mobile devices is emphasized`;
+    try {
+      const model = genAI.getGenerativeModel({ model: "gemini-pro"});
+      const prompt = `Summarize the following text:
+
+${text}`;
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      const summary = response.text();
+      return summary;
+    } catch (error) {
+      console.error('Error summarizing text:', error);
+      throw new Error('Failed to generate summary');
+    }
   }
-  
+
   /**
    * Answer a question based on the provided context
    * @param {string} question - Question to answer
@@ -33,26 +33,21 @@ Key points identified:
    * @returns {Promise<string>} - Generated answer
    */
   static async answerQuestion(question, context) {
-    // In a real implementation, we would:
-    // 1. Send the question and context to an AI service
-    // 2. Return the generated answer
-    
-    // For demo purposes, we'll return a mock answer
-    console.log(`Answering question: ${question}`);
-    
-    // Simulate processing time
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    const answers = [
-      "Based on the content, the main topic discussed was audio transcription technology and its applications.",
-      "The text mentions using speech recognition systems to convert audio into written text.",
-      "According to the material, the solution can be integrated with mobile devices for convenient use.",
-      "The content emphasizes the importance of accurate transcription for productivity applications.",
-      "From the information provided, the system can process various types of audio content."
-    ];
-    
-    // Return a random answer for demo purposes
-    return answers[Math.floor(Math.random() * answers.length)];
+    try {
+      const model = genAI.getGenerativeModel({ model: "gemini-pro"});
+      const prompt = `Based on the following context, answer the question.
+
+Context: ${context}
+
+Question: ${question}`;
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      const answer = response.text();
+      return answer;
+    } catch (error) {
+      console.error('Error answering question:', error);
+      throw new Error('Failed to answer question');
+    }
   }
 }
 
